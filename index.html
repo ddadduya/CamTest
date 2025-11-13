@@ -154,7 +154,7 @@
                     const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
                     const data = await resp.json();
 
-                    // Mengembalikan objek address yang lebih detail
+                    // Mengembalikan objek address yang detail
                     return data.address || { display_name: data.display_name || '(Alamat tidak ditemukan)' };
                 } catch (e) {
                     console.warn('Reverse geocode failed', e);
@@ -224,7 +224,7 @@
                     ctx.drawImage(frameOverlay, 0, 0, OUTPUT_W, OUTPUT_H);
                 }
 
-                // --- Membangun Baris Teks Sesuai Urutan yang Diminta: Tanggal, Koordinat, Alamat Lengkap ---
+                // --- Membangun Baris Teks Sesuai Urutan yang Diminta ---
                 const lines = [];
 
                 // 1. Tanggal dan Waktu
@@ -239,36 +239,47 @@
                 if (latestAddress) {
                     const addr = latestAddress;
 
-                    // NAMA JALAN (road, pedestrian, dll)
+                    // Baris 1 Alamat: NAMA JALAN / NOMOR / BLOK (Prioritas detail)
+                    const streetParts = [];
                     const road = addr.road || addr.pedestrian || addr.path || addr.cycleway || '';
-                    if (road) lines.push(road);
+                    if (road) streetParts.push(road);
 
-                    // NOMOR JALAN / BLOK (house_number, suburb, neighbourhood)
-                    const numberOrBlock = addr.house_number || addr.suburb || addr.neighbourhood || '';
-                    if (numberOrBlock) lines.push(numberOrBlock);
+                    const numOrBlock = addr.house_number || addr.suburb || addr.neighbourhood || '';
+                    if (numOrBlock) streetParts.push(numOrBlock);
 
-                    // KOTA (city, town, village)
+                    if (streetParts.length > 0) {
+                        // Jika detail jalan terdeteksi, gabungkan menjadi satu baris
+                        lines.push(streetParts.join(', '));
+                    } else if (addr.display_name && !addr.city) {
+                        // FALLBACK: Jika tidak ada detail jalan tapi ada display_name (dan belum ada city),
+                        // Ambil bagian awal dari display_name
+                        const rawParts = addr.display_name.split(',').map(p => p.trim());
+                        // Ambil 2 bagian pertama yang biasanya berisi jalan dan nomor
+                        if (rawParts.length > 1) lines.push(rawParts.slice(0, 2).join(', '));
+                    }
+
+                    // Baris 2 Alamat: KOTA / PROVINSI / KODE POS
+                    const cityParts = [];
                     const city = addr.city || addr.town || addr.village || addr.county || '';
-                    if (city) lines.push(city);
+                    if (city) cityParts.push(city);
 
-                    // PROVINSI KODE POS (state + postcode)
-                    const stateZip = [];
-                    if (addr.state) stateZip.push(addr.state);
-                    if (addr.postcode) stateZip.push(addr.postcode);
-                    if (stateZip.length > 0) lines.push(stateZip.join(' '));
+                    if (addr.state) cityParts.push(addr.state);
+                    if (addr.postcode) cityParts.push(addr.postcode);
 
-                    // NEGARA
+                    if (cityParts.length > 0) lines.push(cityParts.join(', '));
+
+                    // Baris 3 Alamat: NEGARA
                     if (addr.country) lines.push(addr.country);
                 }
 
 
                 // --- Pengaturan Rendering Teks (Pojok Kanan Bawah) ---
-                const padding = 15, lineHeight = 22;
-                ctx.font = "bold 18px sans-serif"; // Ukuran font diperkecil
+                const padding = 15, lineHeight = 20;
+                ctx.font = "bold 20px sans-serif"; // Ukuran font dinaikkan sedikit untuk keterbacaan
                 ctx.textBaseline = "bottom";
                 ctx.textAlign = "right"; // Perataan KANAN
 
-                // Membalikkan urutan array untuk merender dari baris PALING BAWAH ke atas (seperti tumpukan)
+                // Membalikkan urutan array untuk merender dari baris PALING BAWAH ke atas
                 lines.reverse();
 
                 for (let i = 0; i < lines.length; i++) {
